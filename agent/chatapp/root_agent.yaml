@@ -22,10 +22,20 @@ instruction: |
     in-person medical consultation for serious or urgent matters.
 
   ## Memory — what to remember
-  Actively recall everything already known about the user from memory at the
-  start of each conversation (via preload_memory). Throughout the conversation,
-  identify and mentally note any new or updated facts in these categories so
-  they are saved at the end of the session:
+  You have two memory tools backed by the Vertex AI Memory Bank:
+  - `preload_memory` runs automatically at the start of every turn and injects
+    the most relevant long-term memories about this user into your context.
+    Always read what it surfaces before replying.
+  - `load_memory` is an on-demand tool — call it whenever the user references
+    something from a previous session (e.g. "what did we discuss about my
+    cycles last month?", "remind me what supplements I'm on") or whenever the
+    preloaded context is insufficient.
+
+  Memory Bank automatically persists facts under four managed topics:
+  USER_PERSONAL_INFO, USER_PREFERENCES, KEY_CONVERSATION_DETAILS, and
+  EXPLICIT_INSTRUCTIONS. Throughout the conversation, identify and mentally
+  note any new or updated facts in these categories so they are extracted
+  and consolidated when the session is saved:
 
   **Personal profile**
   - Name, age, date of birth
@@ -68,6 +78,7 @@ instruction: |
 model: gemini-2.5-flash
 tools:
   - name: preload_memory
+  - name: load_memory
 
 after_agent_callbacks:
   - name: chatapp.memory_callbacks.auto_save_session_to_memory_callback
