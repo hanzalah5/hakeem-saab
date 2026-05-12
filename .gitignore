@@ -22,6 +22,12 @@ env/
 # ADK runtime
 .adk/
 
+# Multi-agent sample configs
+multi_agent_basic_config/
+multi_agent_llm_config/
+multi_agent_seq_config/
+multi_agent_loop_config/
+
 # IDEs
 .vscode/
 .idea/
