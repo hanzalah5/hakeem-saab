@@ -1,0 +1,56 @@
+{
+    "age": 28,
+    "weight_kg": 62,
+    "height_ft": "5'6\"",
+    "BMI": 22.1,
+    "cycle_data": {
+      "average_cycle_length": 28,
+      "previous_cycle_lengths": [
+        28,
+        29,
+        27
+      ],
+      "current_cycle_type": "Regular",
+      "current_cycle_day": 3,
+      "current_cycle_phase": "Menstrual Phase",
+      "current_phase_day": 3,
+      "late_period_flag": "False"
+    },
+    "try_to_conceive": {
+      "trying_to_conceive": false,
+      "sexual_activities": [
+        "Didnt have sex"
+      ],
+      "sexual_feelings": "Low Sex Drive",
+      "ovulation_test": "Didn't have an ovulation test"
+    },
+    "user_logged_data": {
+      "symptoms": [
+        "Cramps",
+        "Fatigue",
+        "Back pain",
+        "Bloating"
+      ],
+      "gastrointestinal": [
+        "Abdominal pain"
+      ],
+      "blood_flow_level": "medium",
+      "vaginal_discharges": "No discharge",
+      "moods": [
+        "low energy",
+        "sensitive",
+        "Calm"
+      ],
+      "sleep_quality": "Daytime Fatigue",
+      "diet_type": "Vegetarian",
+      "supplements": "Iron",
+      "other_activities": [
+        "Journaling",
+        "Stressed"
+      ],
+      "physical_activities": [
+        "Yoga",
+        "Didn't exercise"
+      ]
+    }
+  }
