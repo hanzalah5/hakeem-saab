@@ -29,13 +29,13 @@ topics:
   - id: personal_details
     label: "User Personal Details"
     description: >-
-      Static or slow-changing personal attributes such as age, weight,
+      Static or slow-changing personal attributes such as name, age, weight,
       height, ethnicity, location, parity, marital/partnership status,
       and occupation context that materially shapes health guidance.
 
   - id: preferences
     label: "User Preferences"
     description: >-
-      Communication tone, preferred language, lifestyle choices,
+      Communication tone, preferred language, lifestyle choices, likes/dislikes,
       content sensitivities, and any explicit instruction the user gives
       about how they want to be supported in the conversation.

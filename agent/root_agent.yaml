@@ -9,7 +9,7 @@
 
 agent_class: LlmAgent
 name: femverse_coordinator
-model: gemini-flash-latest
+model: gemini-2.5-flash
 description: >-
   FemVerse OB/GYN coordinator. Inspects the user's message and delegates to
   the appropriate specialist (menstrual or pregnancy). Owns no clinical

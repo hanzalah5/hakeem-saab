@@ -30,7 +30,7 @@ class Settings(BaseSettings):
 
     # ---- LLM ---------------------------------------------------------------
     model_name: str = Field(
-        default="gemini-flash-latest",
+        default="gemini-2.5-flash",
         description="Gemini model used by every agent unless overridden in YAML.",
     )
 
