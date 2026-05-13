@@ -24,3 +24,9 @@ disallow_transfer_to_peers: false
 
 before_agent_callbacks:
   - name: agent.core.callbacks.load_menstrual_prompt
+
+# Persist the session to Memory Bank after every turn this specialist
+# handles. Required because, once the coordinator transfers control here,
+# subsequent turns no longer fire the coordinator's after_agent_callback.
+after_agent_callbacks:
+  - name: agent.core.callbacks.save_session_to_memory
