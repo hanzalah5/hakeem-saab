@@ -1,33 +1,48 @@
-# Python
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
-*.egg
-*.egg-info/
-dist/
-build/
-.eggs/
+*$py.class
+*.so
 
-# Virtual environment
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
 .venv/
 venv/
+ENV/
 env/
 
-# Environment variables
 .env
 .env.*
 !.env.example
 
-# ADK runtime
-.adk/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-# IDEs
-.vscode/
 .idea/
-*.suo
-*.user
-
-# OS
+.vscode/
+*.swp
+*.swo
 .DS_Store
 Thumbs.db
+
+*.db
+*.sqlite
+*.sqlite3
+femverse_sessions.db

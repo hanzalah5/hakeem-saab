@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/google/adk-python/refs/heads/main/src/google/adk/agents/config_schemas/AgentConfig.json
+#
+# FemVerse coordinator (root agent).
+# Routes the conversation to the menstrual or pregnancy specialist; never
+# answers clinical questions directly. The `instruction` field is filled at
+# runtime from `state["system_prompt"]`, which is set by the
+# `load_root_prompt` callback (see agent/core/callbacks.py) so the actual
+# prompt lives in agent/prompts/root_router.md.
+
+agent_class: LlmAgent
+name: femverse_coordinator
+model: gemini-2.5-flash
+description: >-
+  FemVerse OB/GYN coordinator. Inspects the user's message and delegates to
+  the appropriate specialist (menstrual or pregnancy). Owns no clinical
+  voice of its own.
+instruction: "{system_prompt}"
+
+sub_agents:
+  - config_path: sub_agents/menstrual_agent.yaml
+  - config_path: sub_agents/pregnancy_agent.yaml
+
+tools:
+  - name: agent.tools.user_data.fetch_user_persona
+  - name: agent.tools.user_data.fetch_daily_logs
+  - name: load_memory
+
+before_agent_callbacks:
+  - name: agent.core.callbacks.load_root_prompt
+
+after_agent_callbacks:
+  - name: agent.core.callbacks.save_session_to_memory

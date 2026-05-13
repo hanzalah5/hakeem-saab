@@ -1,0 +1,41 @@
+# FemVerse Memory Bank — extraction topics.
+#
+# Memory Bank's server-side LLM uses these category descriptions to decide
+# which facts from a session to persist and how to label them. Provision
+# these topics on the Agent Engine instance (out-of-band, via the Vertex
+# Memory Bank console or the Agent Platform API) and keep this file as the
+# single source of truth so the four categories stay in sync between the
+# server-side configuration and the prompts that shape the conversation.
+#
+# Topic ids are stable; labels and descriptions can be edited freely.
+
+topics:
+  - id: health_facts
+    label: "Health Facts"
+    description: >-
+      Medical history, diagnoses, current and past symptoms, cycle data
+      (length, phase, flow, ovulation), gestational data (week, trimester,
+      fetal movement, BP, glucose), lab results, prescriptions, and any
+      other OB/GYN-specific metric the user volunteers.
+
+  - id: nutritional_facts
+    label: "Nutritional Facts"
+    description: >-
+      Dietary habits and restrictions, allergies and intolerances,
+      supplements and vitamins, caffeine and alcohol intake, hydration
+      patterns, and pregnancy-relevant nutrition choices (e.g., folate,
+      iron, B12).
+
+  - id: personal_details
+    label: "User Personal Details"
+    description: >-
+      Static or slow-changing personal attributes such as name, age, weight,
+      height, ethnicity, location, parity, marital/partnership status,
+      and occupation context that materially shapes health guidance.
+
+  - id: preferences
+    label: "User Preferences"
+    description: >-
+      Communication tone, preferred language, lifestyle choices, likes/dislikes,
+      content sensitivities, and any explicit instruction the user gives
+      about how they want to be supported in the conversation.
