@@ -17,6 +17,7 @@ immediately rather than on the first user turn.
 from __future__ import annotations
 
 from agent.core.runtime import APP_NAME, build_runner, load_root_agent
+import agent.api  # ensure API middleware/openapi patch runs on import
 
 root_agent = load_root_agent()
 """The FemVerse coordinator agent, discovered by the ADK CLI."""

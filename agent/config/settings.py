@@ -61,6 +61,28 @@ class Settings(BaseSettings):
         ),
     )
 
+    # ---- Cassandra --------------------------------------------------------
+    cassandra_host: str = Field(
+        default="localhost",
+        description="Cassandra contact point hostname.",
+    )
+    cassandra_port: int = Field(
+        default=9042,
+        description="Cassandra native protocol port.",
+    )
+    cassandra_username: str = Field(
+        default="cassandra",
+        description="Cassandra username for password auth.",
+    )
+    cassandra_password: str = Field(
+        default="my-secret-pass",
+        description="Cassandra password for password auth.",
+    )
+    cassandra_keyspace: str = Field(
+        default="womensuperhealth",
+        description="Cassandra keyspace used by FemVerse.",
+    )
+
     # ---- Session DB --------------------------------------------------------
     session_db_url: str | None = Field(
         default=None,
@@ -68,6 +90,16 @@ class Settings(BaseSettings):
             "SQLAlchemy URL for DatabaseSessionService. When unset, "
             "agent.sessions.service.get_database_url() is invoked."
         ),
+    )
+
+    # ---- JWT / Auth ------------------------------------------------------
+    secret_key: str = Field(
+        default="changeme",
+        description="Secret key used to sign JWTs in local/dev environments.",
+    )
+    jwt_algorithm: str = Field(
+        default="HS256",
+        description="JWT signing algorithm.",
     )
 
     # ---- Convenience -------------------------------------------------------

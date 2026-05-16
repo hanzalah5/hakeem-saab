@@ -46,6 +46,11 @@ def get_database_url() -> str:
     Raises:
         NotImplementedError: Until the FemVerse session DB is configured.
     """
+    from agent.config.settings import settings
+
+    if settings.session_db_url:
+        return settings.session_db_url
+
     raise NotImplementedError(
         "Configure FemVerse session DB: implement get_database_url() in "
         "agent/sessions/service.py, or set SESSION_DB_URL in .env."
