@@ -11,7 +11,44 @@ and intended return shapes are intentionally complete so the LLM can decide
 
 from __future__ import annotations
 
+import json
+import logging
+import uuid
 from typing import Any
+
+from agent.cassandra.cassandra_client import get_cassandra_session
+
+
+logger = logging.getLogger(__name__)
+
+
+def _decode_persona_payload(payload: Any) -> dict[str, Any] | None:
+  if payload is None:
+    return None
+
+  if isinstance(payload, dict):
+    return payload
+
+  if isinstance(payload, (bytes, bytearray, memoryview)):
+    payload = bytes(payload).decode("utf-8")
+
+  if isinstance(payload, str):
+    try:
+      decoded = json.loads(payload)
+    except json.JSONDecodeError:
+      logger.warning("Cassandra persona payload was not valid JSON.")
+      return {"persona_data": payload}
+
+    return decoded if isinstance(decoded, dict) else {"persona_data": decoded}
+
+  return {"persona_data": payload}
+
+
+def _normalize_user_id(user_id: str) -> Any:
+  try:
+    return uuid.UUID(user_id)
+  except (ValueError, AttributeError, TypeError):
+    return user_id
 
 
 def fetch_user_persona(user_id: str) -> dict[str, Any] | None:
@@ -41,7 +78,25 @@ def fetch_user_persona(user_id: str) -> dict[str, Any] | None:
         keys such as ``age``, ``weight_kg``, ``height_cm``, ``known_conditions``,
         ``preferences``, etc.
     """
-    # TODO: wire to FemVerse user database (Postgres / Firestore / etc.)
+    client = get_cassandra_session()
+    normalized_user_id = _normalize_user_id(user_id)
+
+    try:
+        rows = client.run_query(
+            "SELECT persona_data FROM user_personas WHERE user_id = %s LIMIT 1",
+            (normalized_user_id,),
+        )
+    except Exception as e:
+        logger.exception("Persona lookup query failed. : %s", str(e))
+        return None
+
+    if not rows:
+        return None
+
+    persona = _decode_persona_payload(getattr(rows[0], "persona_data", None))
+    if persona is not None:
+        return persona
+
     return None
 
 
@@ -69,5 +124,61 @@ def fetch_daily_logs(user_id: str) -> list[dict[str, Any]] | None:
         backend; expect each entry to carry a timestamp plus a domain
         payload (cycle, pregnancy, symptoms, lifestyle).
     """
-    # TODO: wire to FemVerse logs/timeseries store
+    from datetime import datetime, timezone
+    
+    client = get_cassandra_session()
+    normalized_user_id = _normalize_user_id(user_id)
+    
+    # Get current UTC time and format date/time bounds
+    now = datetime.now(timezone.utc)
+    year_month = now.strftime("%Y_%m")
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+    
+    # Try period_llm_response_history first
+    try:
+        rows = client.run_query(
+            """
+            SELECT user_data
+            FROM period_llm_response_history
+            WHERE user_id = %s
+              AND year_month = %s
+              AND generated_at >= %s
+              AND generated_at <= %s
+            LIMIT 1
+            """,
+            (normalized_user_id, year_month, day_start, day_end),
+        )
+        
+        if rows:
+            data = getattr(rows[0], "user_data", None)
+            decoded = _decode_persona_payload(data)
+            if decoded is not None:
+                return [decoded] if isinstance(decoded, dict) else decoded
+    except Exception as exc:
+        logger.debug("Period logs lookup failed; trying pregnancy records.", exc_info=True)
+    
+    # Fall back to pregnancy_llm_response_history
+    try:
+        rows = client.run_query(
+            """
+            SELECT user_data
+            FROM pregnancy_llm_response_history
+            WHERE user_id = %s
+              AND year_month = %s
+              AND generated_at >= %s
+              AND generated_at <= %s
+            LIMIT 1
+            """,
+            (normalized_user_id, year_month, day_start, day_end),
+        )
+        
+        if rows:
+            data = getattr(rows[0], "user_data", None)
+            decoded = _decode_persona_payload(data)
+            if decoded is not None:
+                return [decoded] if isinstance(decoded, dict) else decoded
+    except Exception as exc:
+        logger.debug("Pregnancy logs lookup failed.", exc_info=True)
+    
     return None
