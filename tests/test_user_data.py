@@ -1,4 +1,4 @@
-"""Test suite for agent.tools.user_data functions."""
+"""Test suite for femverse.tools.user_data functions."""
 
 import json
 from datetime import datetime, timezone
@@ -7,7 +7,7 @@ import uuid
 
 import pytest
 
-from agent.tools.user_data import (
+from femverse.tools.user_data import (
     fetch_user_persona,
     fetch_daily_logs,
     _decode_persona_payload,
@@ -89,7 +89,7 @@ class MockRow:
 class TestFetchUserPersona:
     """Test fetch_user_persona function."""
 
-    @patch("agent.tools.user_data.get_cassandra_session")
+    @patch("femverse.tools.user_data.get_cassandra_session")
     def test_fetch_persona_success_dict(self, mock_get_session):
         """Should return persona dict when query succeeds."""
         mock_client = MagicMock()
@@ -104,7 +104,7 @@ class TestFetchUserPersona:
         assert result == persona_data
         mock_client.run_query.assert_called_once()
 
-    @patch("agent.tools.user_data.get_cassandra_session")
+    @patch("femverse.tools.user_data.get_cassandra_session")
     def test_fetch_persona_success_json_string(self, mock_get_session):
         """Should decode and return persona from JSON string."""
         mock_client = MagicMock()
@@ -118,7 +118,7 @@ class TestFetchUserPersona:
         
         assert result == {"age": 28, "weight_kg": 62}
 
-    @patch("agent.tools.user_data.get_cassandra_session")
+    @patch("femverse.tools.user_data.get_cassandra_session")
     def test_fetch_persona_no_rows(self, mock_get_session):
         """Should return None when no rows found."""
         mock_client = MagicMock()
@@ -129,7 +129,7 @@ class TestFetchUserPersona:
         
         assert result is None
 
-    @patch("agent.tools.user_data.get_cassandra_session")
+    @patch("femverse.tools.user_data.get_cassandra_session")
     def test_fetch_persona_cassandra_exception(self, mock_get_session):
         """Should return None on Cassandra exception."""
         mock_client = MagicMock()
@@ -140,7 +140,7 @@ class TestFetchUserPersona:
         
         assert result is None
 
-    @patch("agent.tools.user_data.get_cassandra_session")
+    @patch("femverse.tools.user_data.get_cassandra_session")
     def test_fetch_persona_with_uuid(self, mock_get_session):
         """Should normalize UUID user_id."""
         mock_client = MagicMock()
@@ -162,7 +162,7 @@ class TestFetchUserPersona:
 class TestFetchDailyLogs:
     """Test fetch_daily_logs function."""
 
-    @patch("agent.tools.user_data.get_cassandra_session")
+    @patch("femverse.tools.user_data.get_cassandra_session")
     def test_fetch_daily_logs_period_success(self, mock_get_session):
         """Should return logs from period_llm_response_history when available."""
         mock_client = MagicMock()
@@ -184,7 +184,7 @@ class TestFetchDailyLogs:
         # Should only call once (period table)
         assert mock_client.run_query.call_count == 1
 
-    @patch("agent.tools.user_data.get_cassandra_session")
+    @patch("femverse.tools.user_data.get_cassandra_session")
     def test_fetch_daily_logs_period_empty_pregnancy_success(self, mock_get_session):
         """Should fallback to pregnancy_llm_response_history when period is empty."""
         mock_client = MagicMock()
@@ -202,7 +202,7 @@ class TestFetchDailyLogs:
         # Should call twice (period, then pregnancy)
         assert mock_client.run_query.call_count == 2
 
-    @patch("agent.tools.user_data.get_cassandra_session")
+    @patch("femverse.tools.user_data.get_cassandra_session")
     def test_fetch_daily_logs_both_empty(self, mock_get_session):
         """Should return None when both period and pregnancy tables are empty."""
         mock_client = MagicMock()
@@ -216,7 +216,7 @@ class TestFetchDailyLogs:
         assert result is None
         assert mock_client.run_query.call_count == 2
 
-    @patch("agent.tools.user_data.get_cassandra_session")
+    @patch("femverse.tools.user_data.get_cassandra_session")
     def test_fetch_daily_logs_period_exception_pregnancy_success(self, mock_get_session):
         """Should fallback to pregnancy when period query raises exception."""
         mock_client = MagicMock()
@@ -235,7 +235,7 @@ class TestFetchDailyLogs:
         
         assert result == [pregnancy_data]
 
-    @patch("agent.tools.user_data.get_cassandra_session")
+    @patch("femverse.tools.user_data.get_cassandra_session")
     def test_fetch_daily_logs_both_exceptions(self, mock_get_session):
         """Should return None when both queries raise exceptions."""
         mock_client = MagicMock()
@@ -250,7 +250,7 @@ class TestFetchDailyLogs:
         
         assert result is None
 
-    @patch("agent.tools.user_data.get_cassandra_session")
+    @patch("femverse.tools.user_data.get_cassandra_session")
     def test_fetch_daily_logs_json_string_payload(self, mock_get_session):
         """Should decode JSON string payload from Cassandra."""
         mock_client = MagicMock()
@@ -264,7 +264,7 @@ class TestFetchDailyLogs:
         
         assert result == [{"cycle_day": 12, "symptoms": ["cramps", "headache"]}]
 
-    @patch("agent.tools.user_data.get_cassandra_session")
+    @patch("femverse.tools.user_data.get_cassandra_session")
     def test_fetch_daily_logs_with_uuid(self, mock_get_session):
         """Should normalize UUID user_id."""
         mock_client = MagicMock()
@@ -282,7 +282,7 @@ class TestFetchDailyLogs:
         call_args = mock_client.run_query.call_args[0]
         assert isinstance(call_args[1][0], uuid.UUID)
 
-    @patch("agent.tools.user_data.get_cassandra_session")
+    @patch("femverse.tools.user_data.get_cassandra_session")
     def test_fetch_daily_logs_time_bounds(self, mock_get_session):
         """Should query with correct date/time bounds."""
         mock_client = MagicMock()
@@ -312,7 +312,7 @@ class TestFetchDailyLogs:
             assert isinstance(day_end, datetime)
             assert day_start < day_end
 
-    @patch("agent.tools.user_data.get_cassandra_session")
+    @patch("femverse.tools.user_data.get_cassandra_session")
     def test_fetch_daily_logs_none_payload(self, mock_get_session):
         """Should return None when payload is None."""
         mock_client = MagicMock()
@@ -325,7 +325,7 @@ class TestFetchDailyLogs:
         
         assert result is None
 
-    @patch("agent.tools.user_data.get_cassandra_session")
+    @patch("femverse.tools.user_data.get_cassandra_session")
     def test_fetch_daily_logs_bytes_payload(self, mock_get_session):
         """Should decode bytes payload."""
         mock_client = MagicMock()

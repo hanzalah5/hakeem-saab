@@ -1,4 +1,4 @@
-"""Integration tests for agent.tools.user_data with real Cassandra."""
+"""Integration tests for femverse.tools.user_data with real Cassandra."""
 
 import json
 import uuid
@@ -6,8 +6,8 @@ from datetime import datetime, timezone, timedelta
 
 import pytest
 
-from agent.cassandra.cassandra_client import get_cassandra_session
-from agent.tools.user_data import fetch_user_persona, fetch_daily_logs
+from femverse.cassandra.cassandra_client import get_cassandra_session
+from femverse.tools.user_data import fetch_user_persona, fetch_daily_logs
 
 
 # Test fixtures
@@ -342,6 +342,6 @@ class TestCassandraConnectionSetup:
 
     def test_cassandra_keyspace_configured(self):
         """Test that the correct keyspace is configured."""
-        from agent.config.settings import settings
+        from femverse.config.settings import settings
         
         assert settings.cassandra_keyspace == "womensuperhealth"
