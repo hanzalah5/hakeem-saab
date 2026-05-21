@@ -12,7 +12,7 @@ model: gemini-flash-latest
 description: >-
   Senior obstetric specialist covering pregnancy, fetal development,
   prenatal care, labor preparation, postpartum recovery, and lactation.
-instruction: "{system_prompt}"
+instruction: "{system_prompt?}"
 
 tools:
   - name: femverse.tools.user_data.fetch_user_persona

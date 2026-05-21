@@ -52,7 +52,7 @@ def _normalize_user_id(user_id: str) -> Any:
     return user_id
 
 
-def fetch_user_persona(user_id: str) -> dict[str, Any] | None:
+async def fetch_user_persona(user_id: str) -> dict[str, Any] | None:
     """Fetch the user's persona profile from the FemVerse database.
 
     Call this when you need static or slow-changing attributes about the user
@@ -83,7 +83,7 @@ def fetch_user_persona(user_id: str) -> dict[str, Any] | None:
     normalized_user_id = _normalize_user_id(user_id)
 
     try:
-        rows = client.run_query(
+        rows = await client.run_query_async(
             "SELECT persona_data FROM user_personas WHERE user_id = %s LIMIT 1",
             (normalized_user_id,),
         )
@@ -112,7 +112,7 @@ def _today_bounds() -> tuple[str, "datetime", "datetime"]:
     return year_month, day_start, day_end
 
 
-def fetch_period_daily_logs(user_id: str) -> list[dict[str, Any]] | None:
+async def fetch_period_daily_logs(user_id: str) -> list[dict[str, Any]] | None:
     """Fetch the user's recent menstrual / cycle daily logs.
 
     Use this when the answer depends on **current** menstrual or hormonal
@@ -139,7 +139,7 @@ def fetch_period_daily_logs(user_id: str) -> list[dict[str, Any]] | None:
     year_month, day_start, day_end = _today_bounds()
 
     try:
-        rows = client.run_query(
+        rows = await client.run_query_async(
             """
             SELECT user_data
             FROM period_llm_response_history
@@ -165,7 +165,7 @@ def fetch_period_daily_logs(user_id: str) -> list[dict[str, Any]] | None:
     return [decoded] if isinstance(decoded, dict) else decoded
 
 
-def fetch_pregnancy_daily_logs(user_id: str) -> list[dict[str, Any]] | None:
+async def fetch_pregnancy_daily_logs(user_id: str) -> list[dict[str, Any]] | None:
     """Fetch the user's recent pregnancy daily logs.
 
     Use this when the answer depends on **current** pregnancy-related state
@@ -194,7 +194,7 @@ def fetch_pregnancy_daily_logs(user_id: str) -> list[dict[str, Any]] | None:
     year_month, day_start, day_end = _today_bounds()
 
     try:
-        rows = client.run_query(
+        rows = await client.run_query_async(
             """
             SELECT user_data
             FROM pregnancy_llm_response_history
