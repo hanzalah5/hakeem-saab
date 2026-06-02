@@ -14,8 +14,14 @@ validate at construction time.
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
@@ -50,6 +56,13 @@ class Settings(BaseSettings):
     google_cloud_location: str | None = Field(
         default=None,
         description="GCP location, e.g. 'us-central1'.",
+    )
+    google_application_credentials: str | None = Field(
+        default=None,
+        description=(
+            "Path to a GCP service account JSON file. Sets "
+            "GOOGLE_APPLICATION_CREDENTIALS for ADC when applied."
+        ),
     )
 
     # ---- Memory Bank -------------------------------------------------------
@@ -111,5 +124,22 @@ class Settings(BaseSettings):
         return f"agentengine://{self.agent_engine_id}"
 
 
+def apply_google_env(cfg: Settings) -> None:
+    """Mirror Vertex-related settings into ``os.environ`` for Google SDKs."""
+    if cfg.google_application_credentials:
+        creds_path = Path(cfg.google_application_credentials)
+        if not creds_path.is_absolute():
+            creds_path = (_REPO_ROOT / creds_path).resolve()
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(creds_path)
+    if cfg.google_genai_use_vertexai:
+        os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "1")
+    if cfg.google_cloud_project:
+        os.environ.setdefault("GOOGLE_CLOUD_PROJECT", cfg.google_cloud_project)
+    if cfg.google_cloud_location:
+        os.environ.setdefault("GOOGLE_CLOUD_LOCATION", cfg.google_cloud_location)
+
+
+load_dotenv(_REPO_ROOT / ".env")
 settings = Settings()
 """Module-level singleton; import this rather than re-instantiating."""
+apply_google_env(settings)

@@ -29,6 +29,10 @@ env/
 .env.*
 !.env.example
 
+# GCP service account keys (never commit)
+vertexai-creds.json
+*-creds.json
+
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/

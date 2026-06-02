@@ -8,7 +8,7 @@
 
 agent_class: LlmAgent
 name: menstrual_specialist
-model: gemini-flash-latest
+model: gemini-2.5-flash
 description: >-
   Senior gynecology specialist covering menstrual cycles, hormones, PCOS,
   contraception, fertility tracking, and general women's health for
