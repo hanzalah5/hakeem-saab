@@ -2,9 +2,10 @@
 #
 # FemVerse menstrual / gynecology specialist (single-agent app).
 #
-# `instruction` is filled at runtime by the `load_menstrual_prompt` callback,
-# which concatenates femverse/prompts/menstrual_system.md with
-# femverse/prompts/memory_extraction_guidance.md.
+# `instruction` is filled at runtime by the `load_menstrual_prompt` callback:
+#   {system_prompt?}  — menstrual_system.md + memory_extraction_guidance.md
+#   {user_persona?}   — user profile fetched from Cassandra once per session
+#                       and cached in session state; empty string if unavailable.
 
 agent_class: LlmAgent
 name: menstrual_specialist
@@ -13,11 +14,9 @@ description: >-
   Senior gynecology specialist covering menstrual cycles, hormones, PCOS,
   contraception, fertility tracking, and general women's health for
   non-pregnant users.
-instruction: "{system_prompt?}"
+instruction: "{system_prompt?}\n\n{user_persona?}"
 
 tools:
-  - name: femverse.tools.user_data.fetch_user_persona
-  - name: femverse.tools.user_data.fetch_period_daily_logs
   - name: load_memory
 
 before_agent_callbacks:
