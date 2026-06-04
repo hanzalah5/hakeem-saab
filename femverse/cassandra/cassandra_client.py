@@ -106,4 +106,15 @@ class CassandraClient:
 
 @lru_cache(maxsize=1)
 def get_cassandra_session() -> CassandraClient:
-    return CassandraClient()
+    """Return the process-wide CassandraClient, already connected.
+
+    The TCP handshake, auth, and keyspace check are performed here so that
+    subsequent calls (e.g. persona queries during a session callback) only
+    pay the cost of the SELECT, not the connection setup.
+
+    Call this at application startup — both app ``__init__.py`` modules do
+    this — so the connection is ready before the first user session arrives.
+    """
+    client = CassandraClient()
+    client.connect()
+    return client
