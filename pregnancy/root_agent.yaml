@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/google/adk-python/refs/heads/main/src/google/adk/agents/config_schemas/AgentConfig.json
+#
+# FemVerse pregnancy / prenatal specialist (single-agent app).
+#
+# `instruction` is filled at runtime by the `load_pregnancy_prompt` callback:
+#   {system_prompt?}  — pregnancy_system.md + memory_extraction_guidance.md
+#   {user_persona?}   — user profile fetched from Cassandra once per session
+#                       and cached in session state; empty string if unavailable.
+
+agent_class: LlmAgent
+name: pregnancy_specialist
+model: gemini-2.5-flash
+description: >-
+  Senior obstetric specialist covering pregnancy, fetal development,
+  prenatal care, labor preparation, postpartum recovery, and lactation.
+instruction: "{system_prompt?}\n\n{user_persona?}"
+
+tools:
+  - name: load_memory
+
+before_agent_callbacks:
+  - name: femverse.core.callbacks.load_pregnancy_prompt
+
+# Persist the session to Memory Bank after every turn so health facts,
+# preferences, and personal details accrue across conversations.
+after_agent_callbacks:
+  - name: femverse.core.callbacks.save_session_to_memory
