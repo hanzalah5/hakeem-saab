@@ -1,5 +1,6 @@
-"""Cassandra-backed user context helpers used by FemVerse callbacks."""
+"""FemVerse tools package.
 
-from femverse.tools.user_data import fetch_user_persona
-
-__all__ = ["fetch_user_persona"]
+User context (the persona) is no longer fetched here — the backend pre-seeds it
+into session state at session-creation time. This package is kept for future
+ADK tools.
+"""

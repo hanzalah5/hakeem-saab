@@ -30,17 +30,14 @@ This repository replaces the legacy `legacy_Imp.py` single-file Streamlit protot
 |   tracking      |                |   lactation      |
 +-------+---------+                +---------+--------+
         |                                    |
-        |   before_agent_callback            |
-        |   (persona pre-loaded silently)    |
-        |                                    |
         +----------------+-------------------+
                          v
-              +-------------------+
-              |     Cassandra     |
-              |  (user_personas)  |
-              +-------------------+
               |   DatabaseSessionService   (your SQL DB)
               |   VertexAiMemoryBankService (Agent Engine)
+
+  Persona is pre-seeded into session state by the backend at
+  session creation ({user_persona?}); the chatbot itself does
+  not connect to any user-profile database.
 ```
 
 The two apps are independent at runtime: sessions and Memory Bank state are siloed per `app_name`. They share the `femverse/` Python package for prompts, callbacks, settings, and service factories — but neither app can transfer control to the other. The frontend chooses which app to call.
@@ -50,40 +47,37 @@ The two apps are independent at runtime: sessions and Memory Bank state are silo
 | Menstrual app      | `menstrual/root_agent.yaml`, `menstrual/__init__.py`              |
 | Pregnancy app      | `pregnancy/root_agent.yaml`, `pregnancy/__init__.py`              |
 | Prompts            | `femverse/prompts/*.md` (loaded via `femverse.prompts.loader`)    |
-| User context       | `femverse/tools/user_data.py` (called by callbacks, not the LLM) |
 | Memory             | `femverse/memory/service.py` + `femverse/memory/topics.yaml`      |
 | Sessions           | `femverse/sessions/service.py` (SQL URL via `SESSION_DB_URL`)     |
 | Callbacks          | `femverse/core/callbacks.py`                                      |
 | Runtime wiring     | `femverse/core/runtime.py`                                        |
 | Settings           | `femverse/config/settings.py`                                     |
-| Cassandra client   | `femverse/cassandra/`                                             |
 
 ## User context — how persona is delivered
 
-The user's Cassandra profile is fetched **once per session** inside the `before_agent_callback`, before the LLM ever speaks. It is injected silently into the agent's instruction via the `{user_persona?}` state placeholder — the user never sees a tool call.
+The chatbot does **not** fetch the user profile itself. The backend reads the
+user's persona from its own database (Cassandra) and **pre-seeds it into session
+state** at session-creation time, under the `user_persona` key. ADK then resolves
+the `{user_persona?}` placeholder in the agent instruction from that seeded state
+automatically — the user never sees a tool call, and the chatbot never connects to
+a user-profile database.
 
 ```
-New session created  (userId = patient UUID in URL path)
-  → before_agent_callback fires
-      1. state["user_persona"] not set yet
-      2. Read user_id from session.user_id (or state["user_id"] override)
-      3. Validate it is a real UUID (skip silently if not — e.g. ADK's "user" default)
-      4. await fetch_user_persona(user_id)  →  one Cassandra query
-      5. Format result into "## User Profile\n- age: …\n…"
-      6. Write to state["user_persona"]  ←  cached for all subsequent turns
-  → LLM receives full user context from turn 1, no tool call made
+Backend (on "open chat"):
+  1. Fetch persona from Cassandra for the user
+  2. Format it into "## User Profile\n- age: …\n…"
+  3. Create the ADK session with the persona pre-seeded:
+       POST /apps/menstrual/users/{uuid}/sessions
+            { "state": { "user_persona": "## User Profile\n- age: …" } }
 
-Subsequent turns  →  state["user_persona"] already set  →  Cassandra skipped
+Chatbot (every turn):
+  → before_agent_callback injects only the system prompt
+  → ADK resolves {user_persona?} from the seeded state
+  → LLM receives full user context from turn 1
 ```
 
-**Passing the patient UUID:** use the real UUID as the `userId` in the session-creation URL:
-
-```
-POST /apps/menstrual/users/6576c2a2-3d66-4753-8aaa-9a2ea8ab249e/sessions
-```
-
-ADK stores this as `session.user_id` and the callback picks it up automatically.
-Alternatively, set `state["user_id"]` in the initial session state body.
+When no persona is seeded, the optional `{user_persona?}` placeholder resolves to
+an empty string and the agent still responds normally.
 
 ## Quick start
 
@@ -146,7 +140,7 @@ Both apps use [Vertex Memory Bank](https://cloud.google.com/vertex-ai/generative
 
 Memory is **retrieved on demand** via the `load_memory` built-in tool (token-efficient — not preloaded every turn) and **persisted after each turn** via the `after_agent_callback` using a 5-event sliding window.
 
-Memory Bank state is siloed per `app_name`. Static user profile data that should be available regardless of which app the user opens lives in Cassandra and is pre-loaded via the callback.
+Memory Bank state is siloed per `app_name`. Static user profile data is owned by the backend and pre-seeded into session state at session creation (see "User context" above).
 
 ## Session model
 
@@ -157,16 +151,14 @@ Memory Bank state is siloed per `app_name`. Static user profile data that should
 ```
 hakeem-saab/
   femverse/                       # shared library (no agent definitions live here)
-    cassandra/                    # Cassandra client
     config/settings.py            # pydantic-settings env loader
     core/
-      callbacks.py                # prompt-injection + persona pre-load + memory-persistence
+      callbacks.py                # system-prompt injection + memory-persistence
       runtime.py                  # build_runner(app_name=..., yaml_path=...)
     memory/                       # Memory Bank factory + topics.yaml
     prompts/                      # externalized .md system prompts
     sessions/                     # DatabaseSessionService factory
-    tools/
-      user_data.py                # fetch_user_persona (called by callbacks)
+    tools/                        # (reserved for future ADK tools)
   menstrual/                      # ADK app -> app_name = "menstrual"
     root_agent.yaml
     __init__.py
