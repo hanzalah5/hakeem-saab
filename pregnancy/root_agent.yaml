@@ -2,10 +2,11 @@
 #
 # FemVerse pregnancy / prenatal specialist (single-agent app).
 #
-# `instruction` is filled at runtime by the `load_pregnancy_prompt` callback:
-#   {system_prompt?}  — pregnancy_system.md + memory_extraction_guidance.md
-#   {user_persona?}   — user profile fetched from Cassandra once per session
-#                       and cached in session state; empty string if unavailable.
+# `instruction` placeholders are filled at runtime:
+#   {system_prompt?}  — pregnancy_system.md + memory_extraction_guidance.md,
+#                       injected by the `load_pregnancy_prompt` callback.
+#   {user_persona?}   — user profile pre-seeded into session state by the backend
+#                       at session creation; empty string if unavailable.
 
 agent_class: LlmAgent
 name: pregnancy_specialist

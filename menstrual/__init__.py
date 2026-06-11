@@ -9,9 +9,9 @@ This package is what the ADK CLI discovers when you run::
 It re-exports ``root_agent`` (built from ``menstrual/root_agent.yaml``) so the
 ADK CLI can find it without any further configuration.
 
-Loading the YAML at import time means prompt files, tools, and callback
-references are validated up front; a broken reference surfaces immediately
-rather than on the first user turn.
+At import time this module validates the YAML, prompt files, and callback
+references up front so broken references surface immediately rather than on the
+first user turn.
 """
 
 from __future__ import annotations

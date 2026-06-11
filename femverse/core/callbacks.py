@@ -1,18 +1,18 @@
 """ADK callbacks for FemVerse.
 
-Three responsibilities:
+Two responsibilities:
 
 1. **Prompt injection** — each agent's YAML uses two state placeholders in its
    `instruction` field:
    - ``"{system_prompt?}"`` — the specialist markdown prompt (loaded from disk
-     via the prompt loader and appended with memory-extraction guidance).
-   - ``"{user_persona?}"`` — the user's Cassandra profile, pre-loaded once per
-     session and cached in session state for subsequent turns.
-
-   The ``load_*_prompt`` callbacks below run *before* the agent is invoked and
-   write both values into ``callback_context.state``. ADK resolves the
-   placeholders at runtime, injecting them silently into the instruction without
-   the user ever seeing a tool call.
+     via the prompt loader and appended with memory-extraction guidance). The
+     ``load_*_prompt`` callbacks below write this into ``callback_context.state``
+     before the agent runs.
+   - ``"{user_persona?}"`` — the user's profile. This is **not** populated here;
+     the backend fetches it from Cassandra and pre-seeds it into session state
+     (under the ``user_persona`` key) at session-creation time. ADK resolves the
+     placeholder from that seeded state automatically. When no persona was
+     seeded, the optional placeholder resolves to an empty string.
 
 2. **Memory persistence** — ``save_session_to_memory`` runs *after* an agent
    completes a turn and ships the most recent events to Memory Bank, which
@@ -24,92 +24,13 @@ Three responsibilities:
 
 from __future__ import annotations
 
-import json
 import logging
-import uuid
 
 from google.adk.agents.callback_context import CallbackContext
 
 from femverse.prompts.loader import load_prompt
-from femverse.tools.user_data import fetch_user_persona
 
 _logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-
-def _format_persona(persona: dict | None) -> str:
-    """Format a persona dict into a markdown section for the instruction.
-
-    Returns an empty string when persona is None or empty so that the
-    ``{user_persona?}`` placeholder resolves to nothing rather than a
-    blank section header.
-    """
-    if not persona:
-        return ""
-
-    lines = ["## User Profile (pre-loaded — do not ask the user to repeat this)"]
-    for key, value in persona.items():
-        if value is not None and value != "" and value != []:
-            if isinstance(value, (dict, list)):
-                lines.append(f"- {key}: {json.dumps(value, ensure_ascii=False)}")
-            else:
-                lines.append(f"- {key}: {value}")
-    return "\n".join(lines)
-
-
-async def _fetch_and_cache_persona(callback_context: CallbackContext) -> None:
-    """Fetch the user persona from Cassandra and cache it in session state.
-
-    Runs once per session: if ``state["user_persona"]`` is already set (from a
-    prior turn in the same session), the Cassandra query is skipped entirely.
-    The formatted string is written to ``state["user_persona"]`` so ADK can
-    resolve the ``{user_persona?}`` instruction placeholder automatically.
-
-    ``user_id`` resolution order:
-    1. ``state["user_id"]`` — set explicitly by the client in initial state.
-    2. ``session.user_id``  — the identifier ADK stores at session-creation time
-       (from the URL path in ``adk api_server``, or the CLI user in ``adk run``).
-    """
-    if "user_persona" in callback_context.state:
-        return  # Already fetched this session — use the cached value.
-
-    # Try state first; fall back to the ADK session-level user_id.
-    user_id: str | None = callback_context.state.get("user_id")
-    if not user_id:
-        try:
-            user_id = callback_context._invocation_context.session.user_id  # noqa: SLF001
-        except AttributeError:
-            pass
-
-    # Guard: ADK defaults session.user_id to "user" in adk run / adk web.
-    # Only proceed if the value is actually a valid UUID — anything else
-    # (e.g. "user") would cause a Cassandra type error on the UUID column.
-    if user_id:
-        try:
-            uuid.UUID(user_id)
-        except ValueError:
-            _logger.debug(
-                "user_id=%r is not a valid UUID — skipping persona fetch. "
-                "Pass the patient UUID in state['user_id'] to enable it.",
-                user_id,
-            )
-            user_id = None
-
-    persona: dict | None = None
-
-    if user_id:
-        try:
-            persona = await fetch_user_persona(user_id)
-        except Exception:
-            _logger.exception("Persona pre-load failed for user_id=%s", user_id)
-    else:
-        _logger.debug("No valid user_id available; persona will be empty.")
-
-    callback_context.state["user_persona"] = _format_persona(persona)
 
 
 # ---------------------------------------------------------------------------
@@ -118,27 +39,23 @@ async def _fetch_and_cache_persona(callback_context: CallbackContext) -> None:
 
 
 async def load_menstrual_prompt(callback_context: CallbackContext) -> None:
-    """Inject the menstrual specialist prompt and pre-load the user persona."""
+    """Inject the menstrual specialist system prompt into session state."""
     # Base system prompt — same for every user; LRU-cached on disk reads.
     callback_context.state["system_prompt"] = (
         load_prompt("menstrual_system")
         + "\n\n"
         + load_prompt("memory_extraction_guidance")
     )
-    # User persona — fetched from Cassandra once per session, then cached.
-    await _fetch_and_cache_persona(callback_context)
 
 
 async def load_pregnancy_prompt(callback_context: CallbackContext) -> None:
-    """Inject the pregnancy specialist prompt and pre-load the user persona."""
+    """Inject the pregnancy specialist system prompt into session state."""
     # Base system prompt — same for every user; LRU-cached on disk reads.
     callback_context.state["system_prompt"] = (
         load_prompt("pregnancy_system")
         + "\n\n"
         + load_prompt("memory_extraction_guidance")
     )
-    # User persona — fetched from Cassandra once per session, then cached.
-    await _fetch_and_cache_persona(callback_context)
 
 
 # ---------------------------------------------------------------------------
