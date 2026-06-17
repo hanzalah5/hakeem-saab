@@ -1,37 +1,38 @@
 # FemVerse OB/GYN Assistant
 
-A modular, ADK-based conversational assistant for a female healthcare platform. FemVerse plays the role of a senior OB/GYN, shipped as **two independent single-agent apps** — one for menstrual / gynecology care and one for pregnancy / prenatal care.
+A modular, ADK-based conversational assistant for a female healthcare platform. FemVerse plays the role of a senior OB/GYN and dietitian, shipped as **three independent single-agent apps** — one for menstrual / gynecology care, one for pregnancy / prenatal care, and one for nutrition / dietary health.
 
 This repository replaces the legacy `legacy_Imp.py` single-file Streamlit prototype with a clean Google [Agent Development Kit (ADK)](https://adk.dev/) implementation.
 
 ## Architecture
 
 ```
-                       Frontend
-                          |
-              appName = "menstrual" or "pregnancy"
-              userId  = <patient UUID>
-                          |
-                          v
-              +-------------------------+
-              |     adk api_server      |  (single process, autodiscovers both apps)
-              +-----------+-------------+
-                          |
-        +-----------------+------------------+
-        |                                    |
-+-------v---------+                +---------v--------+
-| menstrual_      |                | pregnancy_       |
-| specialist      |                | specialist       |
-|                 |                |                  |
-| - cycle, PCOS,  |                | - gestation,     |
-|   hormones,     |                |   prenatal,      |
-|   contraception |                |   labor prep,    |
-| - fertility     |                |   postpartum,    |
-|   tracking      |                |   lactation      |
-+-------+---------+                +---------+--------+
-        |                                    |
-        +----------------+-------------------+
-                         v
+                            Frontend
+                               |
+        appName = "menstrual" | "pregnancy" | "nutrition"
+        userId  = <patient UUID>
+                               |
+                               v
+                 +-------------------------+
+                 |     adk api_server      |  (single process, autodiscovers all apps)
+                 +-----------+-------------+
+                             |
+     +-----------------------+-----------------------+
+     |                       |                       |
++----v---------+    +--------v-------+    +----------v------+
+| menstrual_   |    | pregnancy_     |    | nutrition_      |
+| specialist   |    | specialist     |    | specialist      |
+|              |    |                |    |                 |
+| - cycle,     |    | - gestation,   |    | - calorie/macro |
+|   PCOS,      |    |   prenatal,    |    |   targets       |
+|   hormones,  |    |   labor prep,  |    | - allergies,    |
+|   contracep. |    |   postpartum,  |    |   preferences   |
+| - fertility  |    |   lactation    |    | - life-stage    |
+|   tracking   |    |                |    |   nutrition     |
++----+---------+    +--------+-------+    +----------+------+
+     |                       |                       |
+     +-----------------------+-----------------------+
+                             v
               |   DatabaseSessionService   (your SQL DB)
               |   VertexAiMemoryBankService (Agent Engine)
 
@@ -40,12 +41,13 @@ This repository replaces the legacy `legacy_Imp.py` single-file Streamlit protot
   not connect to any user-profile database.
 ```
 
-The two apps are independent at runtime: sessions and Memory Bank state are siloed per `app_name`. They share the `femverse/` Python package for prompts, callbacks, settings, and service factories — but neither app can transfer control to the other. The frontend chooses which app to call.
+The three apps are independent at runtime: sessions and Memory Bank state are siloed per `app_name`. They share the `femverse/` Python package for prompts, callbacks, settings, and service factories — but no app can transfer control to another. The frontend chooses which app to call.
 
 | Concern            | Location                                                          |
 |--------------------|-------------------------------------------------------------------|
 | Menstrual app      | `menstrual/root_agent.yaml`, `menstrual/__init__.py`              |
 | Pregnancy app      | `pregnancy/root_agent.yaml`, `pregnancy/__init__.py`              |
+| Nutrition app      | `nutrition/root_agent.yaml`, `nutrition/__init__.py`              |
 | Prompts            | `femverse/prompts/*.md` (loaded via `femverse.prompts.loader`)    |
 | Memory             | `femverse/memory/service.py` + `femverse/memory/topics.yaml`      |
 | Sessions           | `femverse/sessions/service.py` (SQL URL via `SESSION_DB_URL`)     |
@@ -104,34 +106,37 @@ an empty string and the agent still responds normally.
 4. **Run**
 
    ```powershell
-   # Both apps from a single ADK API server (recommended for production)
+   # All apps from a single ADK API server (recommended for production)
    adk api_server . --session_service_uri="$env:SESSION_DB_URL" `
                     --memory_service_uri="agentengine://$env:AGENT_ENGINE_ID"
 
    # Single app — interactive terminal
    adk run menstrual
    adk run pregnancy
+   adk run nutrition
 
    # Single app — browser UI
    adk web menstrual
    adk web pregnancy
+   adk web nutrition
    ```
 
-   Verify both apps loaded:
+   Verify the apps loaded:
    ```powershell
-   curl http://localhost:8000/list-apps   # -> ["menstrual","pregnancy"]
+   curl http://localhost:8000/list-apps   # -> ["menstrual","nutrition","pregnancy"]
    ```
 
 5. **Smoke test without the ADK CLI**
    ```powershell
    python -m menstrual
    python -m pregnancy
+   python -m nutrition
    ```
    Prints a single summary line and exits 0 when the YAML, prompts, and callbacks all resolve cleanly.
 
 ## Memory model
 
-Both apps use [Vertex Memory Bank](https://cloud.google.com/vertex-ai/generative-ai/docs/agent-engine/memory-bank/overview) with four extraction categories defined in [`femverse/memory/topics.yaml`](femverse/memory/topics.yaml):
+All apps use [Vertex Memory Bank](https://cloud.google.com/vertex-ai/generative-ai/docs/agent-engine/memory-bank/overview) with four extraction categories defined in [`femverse/memory/topics.yaml`](femverse/memory/topics.yaml):
 
 1. **Health Facts** — medical history, symptoms, cycle / gestational data, OB/GYN metrics.
 2. **Nutritional Facts** — dietary habits, allergies, supplements, hydration.
@@ -167,6 +172,10 @@ hakeem-saab/
     root_agent.yaml
     __init__.py
     __main__.py
+  nutrition/                      # ADK app -> app_name = "nutrition"
+    root_agent.yaml
+    __init__.py
+    __main__.py                   # python -m nutrition smoke test
   tests/
   requirements.txt
 ```
