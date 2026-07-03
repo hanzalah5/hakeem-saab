@@ -1,6 +1,6 @@
 # FemVerse OB/GYN Assistant
 
-A modular, ADK-based conversational assistant for a female healthcare platform. FemVerse plays the role of a senior OB/GYN and dietitian, shipped as **three independent single-agent apps** — one for menstrual / gynecology care, one for pregnancy / prenatal care, and one for nutrition / dietary health.
+A modular, ADK-based conversational assistant for a female healthcare platform. FemVerse plays the role of a senior OB/GYN and dietitian, shipped as **five independent single-agent apps** — three single-domain (menstrual, pregnancy, nutrition) and two multi-module combinations (period + nutrition, pregnancy + nutrition). The frontend picks the app that matches the user's active module bundle.
 
 This repository replaces the legacy `legacy_Imp.py` single-file Streamlit prototype with a clean Google [Agent Development Kit (ADK)](https://adk.dev/) implementation.
 
@@ -9,29 +9,23 @@ This repository replaces the legacy `legacy_Imp.py` single-file Streamlit protot
 ```
                             Frontend
                                |
-        appName = "menstrual" | "pregnancy" | "nutrition"
-        userId  = <patient UUID>
+   appName = "menstrual" | "pregnancy" | "nutrition"
+           | "period_nutrition" | "pregnancy_nutrition"
+   userId  = <patient UUID>
                                |
                                v
                  +-------------------------+
                  |     adk api_server      |  (single process, autodiscovers all apps)
                  +-----------+-------------+
                              |
-     +-----------------------+-----------------------+
-     |                       |                       |
-+----v---------+    +--------v-------+    +----------v------+
-| menstrual_   |    | pregnancy_     |    | nutrition_      |
-| specialist   |    | specialist     |    | specialist      |
-|              |    |                |    |                 |
-| - cycle,     |    | - gestation,   |    | - calorie/macro |
-|   PCOS,      |    |   prenatal,    |    |   targets       |
-|   hormones,  |    |   labor prep,  |    | - allergies,    |
-|   contracep. |    |   postpartum,  |    |   preferences   |
-| - fertility  |    |   lactation    |    | - life-stage    |
-|   tracking   |    |                |    |   nutrition     |
-+----+---------+    +--------+-------+    +----------+------+
-     |                       |                       |
-     +-----------------------+-----------------------+
+                             v
+       one of five siloed single-agent specialists:
+         - menstrual_specialist            (cycle, PCOS, hormones, fertility)
+         - pregnancy_specialist            (gestation, prenatal, postpartum, lactation)
+         - nutrition_specialist            (calorie/macro targets, allergies, life-stage)
+         - period_nutrition_specialist     (menstrual care + nutrition integration)
+         - pregnancy_nutrition_specialist  (prenatal care + nutrition integration)
+                             |
                              v
               |   DatabaseSessionService   (your SQL DB)
               |   VertexAiMemoryBankService (Agent Engine)
@@ -41,13 +35,15 @@ This repository replaces the legacy `legacy_Imp.py` single-file Streamlit protot
   not connect to any user-profile database.
 ```
 
-The three apps are independent at runtime: sessions and Memory Bank state are siloed per `app_name`. They share the `femverse/` Python package for prompts, callbacks, settings, and service factories — but no app can transfer control to another. The frontend chooses which app to call.
+The five apps are independent at runtime: sessions and Memory Bank state are siloed per `app_name`. They share the `femverse/` Python package for prompts, callbacks, settings, and service factories — but no app can transfer control to another. The frontend chooses which app to call.
 
 | Concern            | Location                                                          |
 |--------------------|-------------------------------------------------------------------|
 | Menstrual app      | `menstrual/root_agent.yaml`, `menstrual/__init__.py`              |
 | Pregnancy app      | `pregnancy/root_agent.yaml`, `pregnancy/__init__.py`              |
 | Nutrition app      | `nutrition/root_agent.yaml`, `nutrition/__init__.py`              |
+| Period+Nutrition   | `period_nutrition/root_agent.yaml`, `period_nutrition/__init__.py`   |
+| Pregnancy+Nutrition| `pregnancy_nutrition/root_agent.yaml`, `pregnancy_nutrition/__init__.py` |
 | Prompts            | `femverse/prompts/*.md` (loaded via `femverse.prompts.loader`)    |
 | Memory             | `femverse/memory/service.py` + `femverse/memory/topics.yaml`      |
 | Sessions           | `femverse/sessions/service.py` (SQL URL via `SESSION_DB_URL`)     |
@@ -114,16 +110,21 @@ an empty string and the agent still responds normally.
    adk run menstrual
    adk run pregnancy
    adk run nutrition
+   adk run period_nutrition
+   adk run pregnancy_nutrition
 
    # Single app — browser UI
    adk web menstrual
    adk web pregnancy
    adk web nutrition
+   adk web period_nutrition
+   adk web pregnancy_nutrition
    ```
 
    Verify the apps loaded:
    ```powershell
-   curl http://localhost:8000/list-apps   # -> ["menstrual","nutrition","pregnancy"]
+   curl http://localhost:8000/list-apps
+   # -> ["menstrual","nutrition","period_nutrition","pregnancy","pregnancy_nutrition"]
    ```
 
 5. **Smoke test without the ADK CLI**
@@ -131,6 +132,8 @@ an empty string and the agent still responds normally.
    python -m menstrual
    python -m pregnancy
    python -m nutrition
+   python -m period_nutrition
+   python -m pregnancy_nutrition
    ```
    Prints a single summary line and exits 0 when the YAML, prompts, and callbacks all resolve cleanly.
 
@@ -176,6 +179,14 @@ hakeem-saab/
     root_agent.yaml
     __init__.py
     __main__.py                   # python -m nutrition smoke test
+  period_nutrition/               # ADK app -> app_name = "period_nutrition"
+    root_agent.yaml
+    __init__.py
+    __main__.py
+  pregnancy_nutrition/            # ADK app -> app_name = "pregnancy_nutrition"
+    root_agent.yaml
+    __init__.py
+    __main__.py
   tests/
   requirements.txt
 ```
