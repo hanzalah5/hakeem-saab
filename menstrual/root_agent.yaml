@@ -18,7 +18,7 @@ description: >-
   Senior gynecology specialist covering menstrual cycles, hormones, PCOS,
   contraception, fertility tracking, and general women's health for
   non-pregnant users.
-instruction: "{system_prompt?}\n\n{user_persona?}\n\n{user_profile?}"
+instruction: "{system_prompt?}\n\n## Long-term persona (background)\n{user_persona?}\n\n## Current session snapshot — today's profile, cycle/nutrition data, and logs (treat as current)\n{user_profile?}"
 
 tools:
   - name: load_memory

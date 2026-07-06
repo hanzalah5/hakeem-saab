@@ -17,7 +17,7 @@ model: gemini-2.5-flash
 description: >-
   Senior obstetric specialist covering pregnancy, fetal development,
   prenatal care, labor preparation, postpartum recovery, and lactation.
-instruction: "{system_prompt?}\n\n{user_persona?}\n\n{user_profile?}"
+instruction: "{system_prompt?}\n\n## Long-term persona (background)\n{user_persona?}\n\n## Current session snapshot — today's profile, pregnancy/nutrition data, and logs (treat as current)\n{user_profile?}"
 
 tools:
   - name: load_memory

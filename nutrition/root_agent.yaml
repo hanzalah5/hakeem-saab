@@ -18,7 +18,7 @@ description: >-
   Senior registered dietitian covering women's nutrition, calorie and macro
   targets, allergies and food preferences, and life-stage dietary needs across
   the menstrual cycle, pregnancy, and postpartum.
-instruction: "{system_prompt?}\n\n{user_persona?}\n\n{user_profile?}"
+instruction: "{system_prompt?}\n\n## Long-term persona (background)\n{user_persona?}\n\n## Current session snapshot — today's profile, nutrition data, and logs (treat as current)\n{user_profile?}"
 
 tools:
   - name: load_memory

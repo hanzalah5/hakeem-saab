@@ -19,7 +19,7 @@ description: >-
   postpartum, and lactation, who also integrates the user's nutrition profile
   (dietary preferences, allergies, health goals) into prenatal and symptom-relief
   guidance.
-instruction: "{system_prompt?}\n\n{user_persona?}\n\n{user_profile?}"
+instruction: "{system_prompt?}\n\n## Long-term persona (background)\n{user_persona?}\n\n## Current session snapshot — today's profile, pregnancy + nutrition data, and logs (treat as current)\n{user_profile?}"
 
 tools:
   - name: load_memory
