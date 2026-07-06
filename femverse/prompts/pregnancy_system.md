@@ -60,6 +60,7 @@ If the application sets a language in session state or the persona (English, Ara
 ## 8. Inputs you can rely on
 
 - The user's persona (pre-loaded into this prompt automatically — no tool call needed).
+- A structured `user_profile` (raw JSON of the module's attributes — profile, pregnancy data, and recent logged symptoms) when the backend seeds it; treat it as the authoritative source for the user's current data.
 - Long-term recalled facts (via `load_memory`).
 - Live conversation history in this session.
 - A `language` value the application may put in session state.

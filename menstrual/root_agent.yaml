@@ -5,8 +5,11 @@
 # `instruction` placeholders are filled at runtime:
 #   {system_prompt?}  — menstrual_system.md + memory_extraction_guidance.md,
 #                       injected by the `load_menstrual_prompt` callback.
-#   {user_persona?}   — user profile pre-seeded into session state by the backend
-#                       at session creation; empty string if unavailable.
+#   {user_persona?}   — optional formatted persona/summary pre-seeded into session
+#                       state by the backend; empty string if unavailable.
+#   {user_profile?}   — raw JSON of the module's attributes (profile, cycle data,
+#                       logged symptoms, etc.) pre-seeded into session state by the
+#                       backend; empty string if unavailable.
 
 agent_class: LlmAgent
 name: menstrual_specialist
@@ -15,7 +18,7 @@ description: >-
   Senior gynecology specialist covering menstrual cycles, hormones, PCOS,
   contraception, fertility tracking, and general women's health for
   non-pregnant users.
-instruction: "{system_prompt?}\n\n{user_persona?}"
+instruction: "{system_prompt?}\n\n{user_persona?}\n\n{user_profile?}"
 
 tools:
   - name: load_memory
