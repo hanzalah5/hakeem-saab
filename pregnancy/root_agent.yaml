@@ -5,8 +5,11 @@
 # `instruction` placeholders are filled at runtime:
 #   {system_prompt?}  — pregnancy_system.md + memory_extraction_guidance.md,
 #                       injected by the `load_pregnancy_prompt` callback.
-#   {user_persona?}   — user profile pre-seeded into session state by the backend
-#                       at session creation; empty string if unavailable.
+#   {user_persona?}   — optional formatted persona/summary pre-seeded into session
+#                       state by the backend; empty string if unavailable.
+#   {user_profile?}   — raw JSON of the module's attributes (profile, pregnancy
+#                       data, logged symptoms, etc.) pre-seeded into session state
+#                       by the backend; empty string if unavailable.
 
 agent_class: LlmAgent
 name: pregnancy_specialist
@@ -14,7 +17,7 @@ model: gemini-2.5-flash
 description: >-
   Senior obstetric specialist covering pregnancy, fetal development,
   prenatal care, labor preparation, postpartum recovery, and lactation.
-instruction: "{system_prompt?}\n\n{user_persona?}"
+instruction: "{system_prompt?}\n\n{user_persona?}\n\n{user_profile?}"
 
 tools:
   - name: load_memory

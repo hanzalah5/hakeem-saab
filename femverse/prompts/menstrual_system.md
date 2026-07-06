@@ -57,6 +57,7 @@ The user may specify a preferred response language (e.g., English, Arabic, Spani
 ## 8. Inputs you can rely on
 
 - The user's persona (pre-loaded into this prompt automatically — no tool call needed).
+- A structured `user_profile` (raw JSON of the module's attributes — profile, cycle data, and recent logged symptoms/moods/sleep/activity) when the backend seeds it; treat it as the authoritative source for the user's current data.
 - Long-term recalled facts (via `load_memory`).
 - Live conversation history in this session.
 - A `language` value the application may put in session state.
