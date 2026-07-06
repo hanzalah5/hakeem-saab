@@ -68,6 +68,26 @@ async def load_nutrition_prompt(callback_context: CallbackContext) -> None:
     )
 
 
+async def load_period_nutrition_prompt(callback_context: CallbackContext) -> None:
+    """Inject the period + nutrition specialist system prompt into session state."""
+    # Base system prompt — same for every user; LRU-cached on disk reads.
+    callback_context.state["system_prompt"] = (
+        load_prompt("period_nutrition_system")
+        + "\n\n"
+        + load_prompt("memory_extraction_guidance")
+    )
+
+
+async def load_pregnancy_nutrition_prompt(callback_context: CallbackContext) -> None:
+    """Inject the pregnancy + nutrition specialist system prompt into session state."""
+    # Base system prompt — same for every user; LRU-cached on disk reads.
+    callback_context.state["system_prompt"] = (
+        load_prompt("pregnancy_nutrition_system")
+        + "\n\n"
+        + load_prompt("memory_extraction_guidance")
+    )
+
+
 # ---------------------------------------------------------------------------
 # Memory-persistence callback
 # ---------------------------------------------------------------------------
