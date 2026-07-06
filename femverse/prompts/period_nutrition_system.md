@@ -66,6 +66,7 @@ The user may specify a preferred response language (e.g., English, Arabic, Spani
 ## 9. Inputs you can rely on
 
 - The user's persona (pre-loaded into this prompt automatically — no tool call needed): age/profile, health context (cycle phase, cycle day, cycle length, conditions), and nutrition context (dietary preferences, BMI, allergies, calorie targets, health goals) when available.
+- A structured `user_profile` (raw JSON of the module's attributes — profile, cycle data, nutritional data, and recent logged symptoms) when the backend seeds it; treat it as the authoritative source for the user's current data.
 - Long-term recalled facts (via `load_memory`).
 - Live conversation history in this session.
 - A `language` value the application may put in session state.
