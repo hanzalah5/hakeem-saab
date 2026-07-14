@@ -2,35 +2,115 @@
 
 Two responsibilities:
 
-1. **Prompt injection** — each agent's YAML uses two state placeholders in its
-   `instruction` field:
-   - ``"{system_prompt?}"`` — the specialist markdown prompt (loaded from disk
-     via the prompt loader and appended with memory-extraction guidance). The
-     ``load_*_prompt`` callbacks below write this into ``callback_context.state``
-     before the agent runs.
-   - ``"{user_persona?}"`` — the user's profile. This is **not** populated here;
-     the backend fetches it from Cassandra and pre-seeds it into session state
-     (under the ``user_persona`` key) at session-creation time. ADK resolves the
-     placeholder from that seeded state automatically. When no persona was
-     seeded, the optional placeholder resolves to an empty string.
+1. **Prompt injection** — each agent's YAML ``instruction`` uses these state
+   placeholders:
+   - ``"{system_prompt?}"`` — the specialist markdown prompt (loaded from disk,
+     appended with memory-extraction guidance, and — **only on the opening turn
+     of an entry-point session** — the matching entry-point fragment). The
+     ``load_*_prompt`` callbacks below build this via ``_compose_system_prompt``.
+   - ``"{user_persona?}"`` / ``"{user_profile?}"`` — the durable persona and the
+     per-session profile JSON. Populated by the backend at session-creation time
+     and resolved from seeded state by ADK; empty string when unseeded.
+   - ``"{entry_context?}"`` — why the user opened the chat (tip/alert/story/…),
+     seeded by the backend. It is **not** touched here; ADK injects it every turn
+     from state, so the entry content stays available for follow-up questions.
+
+   **Entry points — two lifetimes.** The entry *data* (``{entry_context?}``) is
+   present on every turn. The entry *opening-behavior* fragment (e.g.
+   ``entry_tip``) is appended to ``system_prompt`` **only on the opening turn**
+   (before any model output exists), so follow-ups converse normally while still
+   seeing the entry content. Chat Now (no ``entry_context``) is unchanged.
 
 2. **Memory persistence** — ``save_session_to_memory`` runs *after* an agent
-   completes a turn and ships the most recent events to Memory Bank, which
-   does its own LLM-driven extraction and server-side deduplication.
-   We send the last 5 events (sliding window) rather than the full session
-   so the same events are not reprocessed every turn — this matches the
-   "Option 1 (Recommended)" pattern from the Memory Bank ADK quickstart.
+   completes a turn and ships the most recent events to Memory Bank, which does
+   its own LLM-driven extraction and server-side deduplication. We send the last
+   5 events (sliding window) rather than the full session so the same events are
+   not reprocessed every turn.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 
 from google.adk.agents.callback_context import CallbackContext
 
-from femverse.prompts.loader import load_prompt
+from femverse.prompts.loader import PromptNotFoundError, load_prompt
 
 _logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Entry-point helpers
+# ---------------------------------------------------------------------------
+
+# entry_context.type -> prompt-fragment stem. Alerts resolve by severity below.
+_ENTRY_FRAGMENTS = {
+    "tip": "entry_tip",
+    "story": "entry_story",
+    "health_checker": "entry_health_checker",
+}
+
+
+def _parse_entry_context(state) -> dict:
+    """Return the seeded entry_context as a dict (tolerates JSON string or dict)."""
+    raw = state.get("entry_context")
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str) and raw.strip():
+        try:
+            parsed = json.loads(raw)
+            return parsed if isinstance(parsed, dict) else {}
+        except (ValueError, TypeError):
+            return {}
+    return {}
+
+
+def _entry_fragment_stem(entry: dict) -> str | None:
+    """Map an entry_context to its opening-behavior fragment stem, or None."""
+    entry_type = str(entry.get("type", "")).strip().lower()
+    if not entry_type or entry_type == "chat_now":
+        return None
+    if entry_type == "alert":
+        severity = str(entry.get("severity", "")).strip().lower()
+        return "entry_alert_red" if severity == "red" else "entry_alert_yellow"
+    return _ENTRY_FRAGMENTS.get(entry_type)
+
+
+def _is_opening_turn(callback_context: CallbackContext) -> bool:
+    """True on the session's first agent turn (no prior model output yet).
+
+    On the opening (sentinel) turn only the incoming user event exists; there is
+    no event authored by the agent. On later turns prior agent events are present.
+    Defaults to False on any error so entry rules never fire spuriously.
+    """
+    try:
+        session = callback_context._invocation_context.session  # noqa: SLF001
+        events = getattr(session, "events", []) or []
+        return not any(getattr(e, "author", "user") != "user" for e in events)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _compose_system_prompt(callback_context: CallbackContext, domain: str) -> None:
+    """Build ``system_prompt`` for a domain, adding the entry fragment on opening.
+
+    Args:
+        domain: prompt stem prefix, e.g. ``"menstrual"`` -> ``menstrual_system.md``.
+    """
+    # Base system prompt — same for every user; LRU-cached on disk reads.
+    parts = [load_prompt(f"{domain}_system"), load_prompt("memory_extraction_guidance")]
+
+    if _is_opening_turn(callback_context):
+        stem = _entry_fragment_stem(_parse_entry_context(callback_context.state))
+        if stem:
+            try:
+                parts.append(load_prompt(stem))
+            except PromptNotFoundError:
+                # Entry type not yet authored — degrade gracefully to base behavior.
+                _logger.warning("Entry fragment '%s' not found; using base prompt.", stem)
+
+    callback_context.state["system_prompt"] = "\n\n".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -40,52 +120,27 @@ _logger = logging.getLogger(__name__)
 
 async def load_menstrual_prompt(callback_context: CallbackContext) -> None:
     """Inject the menstrual specialist system prompt into session state."""
-    # Base system prompt — same for every user; LRU-cached on disk reads.
-    callback_context.state["system_prompt"] = (
-        load_prompt("menstrual_system")
-        + "\n\n"
-        + load_prompt("memory_extraction_guidance")
-    )
+    _compose_system_prompt(callback_context, "menstrual")
 
 
 async def load_pregnancy_prompt(callback_context: CallbackContext) -> None:
     """Inject the pregnancy specialist system prompt into session state."""
-    # Base system prompt — same for every user; LRU-cached on disk reads.
-    callback_context.state["system_prompt"] = (
-        load_prompt("pregnancy_system")
-        + "\n\n"
-        + load_prompt("memory_extraction_guidance")
-    )
+    _compose_system_prompt(callback_context, "pregnancy")
 
 
 async def load_nutrition_prompt(callback_context: CallbackContext) -> None:
     """Inject the nutrition specialist system prompt into session state."""
-    # Base system prompt — same for every user; LRU-cached on disk reads.
-    callback_context.state["system_prompt"] = (
-        load_prompt("nutrition_system")
-        + "\n\n"
-        + load_prompt("memory_extraction_guidance")
-    )
+    _compose_system_prompt(callback_context, "nutrition")
 
 
 async def load_period_nutrition_prompt(callback_context: CallbackContext) -> None:
     """Inject the period + nutrition specialist system prompt into session state."""
-    # Base system prompt — same for every user; LRU-cached on disk reads.
-    callback_context.state["system_prompt"] = (
-        load_prompt("period_nutrition_system")
-        + "\n\n"
-        + load_prompt("memory_extraction_guidance")
-    )
+    _compose_system_prompt(callback_context, "period_nutrition")
 
 
 async def load_pregnancy_nutrition_prompt(callback_context: CallbackContext) -> None:
     """Inject the pregnancy + nutrition specialist system prompt into session state."""
-    # Base system prompt — same for every user; LRU-cached on disk reads.
-    callback_context.state["system_prompt"] = (
-        load_prompt("pregnancy_nutrition_system")
-        + "\n\n"
-        + load_prompt("memory_extraction_guidance")
-    )
+    _compose_system_prompt(callback_context, "pregnancy_nutrition")
 
 
 # ---------------------------------------------------------------------------
