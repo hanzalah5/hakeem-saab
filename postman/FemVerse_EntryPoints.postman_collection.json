@@ -1,0 +1,815 @@
+{
+  "info": {
+    "name": "FemVerse - Chatbot & Entry Points",
+    "_postman_id": "femverse-entry-points",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Tests the FemVerse ADK chatbot and all 5 entry points across the 5 apps.\n\nSETUP: run `adk api_server .` and set `baseUrl` (default http://localhost:8000). `appName` defaults to `period_nutrition` (PRD examples are Period+Nutrition); switch it to menstrual / pregnancy / nutrition / pregnancy_nutrition for other apps.\n\nFLOW: in each folder run **Create Session** first (it saves `sessionId`), then the **Run** requests.\n\nENTRY POINTS: an entry point is seeded into session state as `entry_context`. The AI's opening message is elicited by a hidden sentinel first turn (`__ENTRY_OPEN__`). Entry data stays in context for follow-ups; opening-behavior rules apply to the first turn only.\n\nSTATE VALUES: shown as JSON objects for readability. In PRODUCTION seed them as JSON strings (json.dumps) for clean prompt injection; both work.\n\nSTATUS: all 5 entry points are implemented (Chat Now, Tip, Story, Alert yellow/red, Health Checker).\n\nNOTE: `/run` returns a JSON array of events (used here for easy assertions); production streams the same events via `/run_sse`. A 500 on a Run is usually a Gemini 429 quota limit, not a bug."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "appName",
+      "value": "period_nutrition"
+    },
+    {
+      "key": "userId",
+      "value": "postman-tester"
+    },
+    {
+      "key": "sessionId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "0 - Setup",
+      "item": [
+        {
+          "name": "List apps",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/list-apps",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "list-apps"
+              ]
+            },
+            "description": "Sanity check - should return the 5 app names (+ femverse/tests)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "1 - Chat Now (baseline)",
+      "item": [
+        {
+          "name": "Create session - Chat Now",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "pm.test('created', () => pm.expect([200,201]).to.include(pm.response.code));",
+                  "pm.collectionVariables.set('sessionId', res.id);",
+                  "pm.test('state seeded', () => pm.expect(res.state).to.be.an('object'));",
+                  "console.log('sessionId =', res.id, '| state keys:', Object.keys(res.state||{}));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/apps/{{appName}}/users/{{userId}}/sessions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "apps",
+                "{{appName}}",
+                "users",
+                "{{userId}}",
+                "sessions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"state\": {\n    \"user_persona\": {\n      \"persona_version\": \"1.0\",\n      \"clinician_summary\": \"29yo, regular ~28d cycles, mild luteal-phase PMS (cramps, low energy, cravings). Vegetarian.\"\n    },\n    \"user_profile\": {\n      \"log_date\": \"2025-12-22T00:00:00+00:00\",\n      \"user_profile\": {\n        \"age\": 29,\n        \"bmi\": 22.1\n      },\n      \"cycle_data\": {\n        \"current_cycle_phase\": \"Luteal\",\n        \"current_cycle_day\": 20,\n        \"current_phase_day\": 8,\n        \"average_cycle_length\": 28\n      },\n      \"user_logged_data\": {\n        \"symptoms\": [\n          \"Cramps\",\n          \"Low energy\",\n          \"Cravings\"\n        ],\n        \"diet_type\": \"Vegetarian\"\n      },\n      \"module\": \"Period + Nutrition\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "No entry_context -> baseline. Seeds persona + profile only."
+          },
+          "response": []
+        },
+        {
+          "name": "Send message",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+                  "let events = []; try { events = pm.response.json(); } catch (e) {}",
+                  "const text = (Array.isArray(events)?events:[])",
+                  "  .filter(e => e && e.content && e.content.parts)",
+                  "  .flatMap(e => e.content.parts)",
+                  "  .filter(p => p && p.text).map(p => p.text).join('');",
+                  "console.log('\\n===== ASSISTANT REPLY =====\\n' + (text || '(no text - if 500, it is usually a Gemini 429 quota limit, not a bug)'));",
+                  "pm.test('non-empty assistant reply', () => pm.expect(text.length).to.be.above(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/run",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "run"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"appName\": \"{{appName}}\",\n  \"userId\": \"{{userId}}\",\n  \"sessionId\": \"{{sessionId}}\",\n  \"newMessage\": {\n    \"role\": \"user\",\n    \"parts\": [\n      {\n        \"text\": \"hi, I have cramps today\"\n      }\n    ]\n  },\n  \"streaming\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Normal first user turn. Baseline Chat Now behavior (user speaks first)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2 - Tip entry",
+      "item": [
+        {
+          "name": "Create session - Tip",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "pm.test('created', () => pm.expect([200,201]).to.include(pm.response.code));",
+                  "pm.collectionVariables.set('sessionId', res.id);",
+                  "pm.test('state seeded', () => pm.expect(res.state).to.be.an('object'));",
+                  "console.log('sessionId =', res.id, '| state keys:', Object.keys(res.state||{}));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/apps/{{appName}}/users/{{userId}}/sessions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "apps",
+                "{{appName}}",
+                "users",
+                "{{userId}}",
+                "sessions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"state\": {\n    \"user_persona\": {\n      \"persona_version\": \"1.0\",\n      \"clinician_summary\": \"29yo, regular ~28d cycles, mild luteal-phase PMS (cramps, low energy, cravings). Vegetarian.\"\n    },\n    \"user_profile\": {\n      \"log_date\": \"2025-12-22T00:00:00+00:00\",\n      \"user_profile\": {\n        \"age\": 29,\n        \"bmi\": 22.1\n      },\n      \"cycle_data\": {\n        \"current_cycle_phase\": \"Luteal\",\n        \"current_cycle_day\": 20,\n        \"current_phase_day\": 8,\n        \"average_cycle_length\": 28\n      },\n      \"user_logged_data\": {\n        \"symptoms\": [\n          \"Cramps\",\n          \"Low energy\",\n          \"Cravings\"\n        ],\n        \"diet_type\": \"Vegetarian\"\n      },\n      \"module\": \"Period + Nutrition\"\n    },\n    \"entry_context\": {\n      \"type\": \"tip\",\n      \"content\": {\n        \"title\": \"Magnesium for Luteal Phase Cramps\",\n        \"body\": \"Magnesium supports muscle relaxation. Recommends 300-400mg daily during the luteal phase. Food sources: spinach, almonds.\"\n      },\n      \"trigger_logs\": {\n        \"symptom\": \"Cramps\",\n        \"cycle_phase\": \"Luteal\",\n        \"cycle_day\": \"20 of 28\"\n      }\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Seeds a Tip entry_context (PRD magnesium example)."
+          },
+          "response": []
+        },
+        {
+          "name": "Opening (sentinel)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+                  "let events = []; try { events = pm.response.json(); } catch (e) {}",
+                  "const text = (Array.isArray(events)?events:[])",
+                  "  .filter(e => e && e.content && e.content.parts)",
+                  "  .flatMap(e => e.content.parts)",
+                  "  .filter(p => p && p.text).map(p => p.text).join('');",
+                  "console.log('\\n===== ASSISTANT REPLY =====\\n' + (text || '(no text - if 500, it is usually a Gemini 429 quota limit, not a bug)'));",
+                  "pm.test('non-empty assistant reply', () => pm.expect(text.length).to.be.above(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/run",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "run"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"appName\": \"{{appName}}\",\n  \"userId\": \"{{userId}}\",\n  \"sessionId\": \"{{sessionId}}\",\n  \"newMessage\": {\n    \"role\": \"user\",\n    \"parts\": [\n      {\n        \"text\": \"__ENTRY_OPEN__\"\n      }\n    ]\n  },\n  \"streaming\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Expect: acknowledge topic + beyond-the-tip insight + numbers + one hook; NO situational questions."
+          },
+          "response": []
+        },
+        {
+          "name": "Follow-up",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+                  "let events = []; try { events = pm.response.json(); } catch (e) {}",
+                  "const text = (Array.isArray(events)?events:[])",
+                  "  .filter(e => e && e.content && e.content.parts)",
+                  "  .flatMap(e => e.content.parts)",
+                  "  .filter(p => p && p.text).map(p => p.text).join('');",
+                  "console.log('\\n===== ASSISTANT REPLY =====\\n' + (text || '(no text - if 500, it is usually a Gemini 429 quota limit, not a bug)'));",
+                  "pm.test('non-empty assistant reply', () => pm.expect(text.length).to.be.above(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/run",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "run"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"appName\": \"{{appName}}\",\n  \"userId\": \"{{userId}}\",\n  \"sessionId\": \"{{sessionId}}\",\n  \"newMessage\": {\n    \"role\": \"user\",\n    \"parts\": [\n      {\n        \"text\": \"yes, the food option please\"\n      }\n    ]\n  },\n  \"streaming\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Follow-up. Should stay tip-aware (spinach/almonds) and converse normally (no re-opening)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3 - Story entry",
+      "item": [
+        {
+          "name": "Create session - Story",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "pm.test('created', () => pm.expect([200,201]).to.include(pm.response.code));",
+                  "pm.collectionVariables.set('sessionId', res.id);",
+                  "pm.test('state seeded', () => pm.expect(res.state).to.be.an('object'));",
+                  "console.log('sessionId =', res.id, '| state keys:', Object.keys(res.state||{}));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/apps/{{appName}}/users/{{userId}}/sessions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "apps",
+                "{{appName}}",
+                "users",
+                "{{userId}}",
+                "sessions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"state\": {\n    \"user_persona\": {\n      \"persona_version\": \"1.0\",\n      \"clinician_summary\": \"29yo, regular ~28d cycles, mild luteal-phase PMS (cramps, low energy, cravings). Vegetarian.\"\n    },\n    \"user_profile\": {\n      \"log_date\": \"2025-12-22T00:00:00+00:00\",\n      \"user_profile\": {\n        \"age\": 29,\n        \"bmi\": 22.1\n      },\n      \"cycle_data\": {\n        \"current_cycle_phase\": \"Luteal\",\n        \"current_cycle_day\": 22,\n        \"current_phase_day\": 8,\n        \"average_cycle_length\": 28\n      },\n      \"user_logged_data\": {\n        \"symptoms\": [\n          \"Fatigue\",\n          \"Mood changes\",\n          \"Cravings\"\n        ],\n        \"diet_type\": \"Vegetarian\"\n      },\n      \"module\": \"Period + Nutrition\"\n    },\n    \"entry_context\": {\n      \"type\": \"story\",\n      \"content\": {\n        \"title\": \"Managing Luteal Phase Energy & Mood\",\n        \"educational\": \"During luteal phase, your metabolism increases 16-20%, which is why you crave more food. Progesterone also reduces serotonin, making mood dips common.\",\n        \"reassuring\": \"This is completely normal. Your body is not broken - it is just operating differently this week.\",\n        \"actions\": \"Eat more carbs in the afternoon, take magnesium to support mood, reduce high-intensity workouts, prioritize sleep.\"\n      },\n      \"trigger_logs\": {\n        \"symptoms\": [\n          \"Fatigue\",\n          \"Mood changes\",\n          \"Cravings\"\n        ],\n        \"cycle_phase\": \"Luteal\",\n        \"cycle_day\": \"22 of 28\"\n      }\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Seeds a Story entry_context (PRD luteal energy/mood example)."
+          },
+          "response": []
+        },
+        {
+          "name": "Opening (sentinel)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+                  "let events = []; try { events = pm.response.json(); } catch (e) {}",
+                  "const text = (Array.isArray(events)?events:[])",
+                  "  .filter(e => e && e.content && e.content.parts)",
+                  "  .flatMap(e => e.content.parts)",
+                  "  .filter(p => p && p.text).map(p => p.text).join('');",
+                  "console.log('\\n===== ASSISTANT REPLY =====\\n' + (text || '(no text - if 500, it is usually a Gemini 429 quota limit, not a bug)'));",
+                  "pm.test('non-empty assistant reply', () => pm.expect(text.length).to.be.above(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/run",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "run"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"appName\": \"{{appName}}\",\n  \"userId\": \"{{userId}}\",\n  \"sessionId\": \"{{sessionId}}\",\n  \"newMessage\": {\n    \"role\": \"user\",\n    \"parts\": [\n      {\n        \"text\": \"__ENTRY_OPEN__\"\n      }\n    ]\n  },\n  \"streaming\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Expect: validate what they read -> 'how for you' -> reference story actions -> personal-history questions -> no new info."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4 - Alert - Yellow",
+      "item": [
+        {
+          "name": "Create session - Yellow alert",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "pm.test('created', () => pm.expect([200,201]).to.include(pm.response.code));",
+                  "pm.collectionVariables.set('sessionId', res.id);",
+                  "pm.test('state seeded', () => pm.expect(res.state).to.be.an('object'));",
+                  "console.log('sessionId =', res.id, '| state keys:', Object.keys(res.state||{}));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/apps/{{appName}}/users/{{userId}}/sessions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "apps",
+                "{{appName}}",
+                "users",
+                "{{userId}}",
+                "sessions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"state\": {\n    \"user_persona\": {\n      \"persona_version\": \"1.0\",\n      \"clinician_summary\": \"34yo, Type 2 Diabetes, tracks macros daily. Period + Nutrition modules.\"\n    },\n    \"user_profile\": {\n      \"user_profile\": {\n        \"age\": 34,\n        \"bmi\": 27.0\n      },\n      \"nutritional_data\": {\n        \"daily_protein_target_g\": 60,\n        \"daily_calorie_target\": 1800\n      },\n      \"medical_conditions\": [\n        \"Type 2 Diabetes\"\n      ],\n      \"cycle_data\": {\n        \"current_cycle_phase\": \"Follicular\",\n        \"current_cycle_day\": 8\n      },\n      \"user_logged_data\": {\n        \"symptoms\": [\n          \"Fatigue\"\n        ],\n        \"total_protein_g\": 16,\n        \"meals_today\": [\n          {\n            \"meal\": \"Breakfast\",\n            \"item\": \"toast + jam\",\n            \"protein_g\": 5\n          },\n          {\n            \"meal\": \"Lunch\",\n            \"item\": \"rice bowl\",\n            \"protein_g\": 8\n          },\n          {\n            \"meal\": \"Snacks\",\n            \"item\": \"apple, almonds\",\n            \"protein_g\": 3\n          }\n        ]\n      },\n      \"module\": \"Period + Nutrition\"\n    },\n    \"entry_context\": {\n      \"type\": \"alert\",\n      \"severity\": \"yellow\",\n      \"content\": {\n        \"title\": \"Low Protein Intake\",\n        \"body\": \"Your protein intake is 16g today. Aim to consume more protein to avoid any long term deficiencies.\"\n      },\n      \"trigger_logs\": {\n        \"protein_consumed_g\": 16,\n        \"protein_target_g\": 60\n      }\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Seeds a YELLOW alert (PRD low-protein example: 16g vs 60g, diabetes, fatigue)."
+          },
+          "response": []
+        },
+        {
+          "name": "Opening (sentinel)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+                  "let events = []; try { events = pm.response.json(); } catch (e) {}",
+                  "const text = (Array.isArray(events)?events:[])",
+                  "  .filter(e => e && e.content && e.content.parts)",
+                  "  .flatMap(e => e.content.parts)",
+                  "  .filter(p => p && p.text).map(p => p.text).join('');",
+                  "console.log('\\n===== ASSISTANT REPLY =====\\n' + (text || '(no text - if 500, it is usually a Gemini 429 quota limit, not a bug)'));",
+                  "pm.test('non-empty assistant reply', () => pm.expect(text.length).to.be.above(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/run",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "run"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"appName\": \"{{appName}}\",\n  \"userId\": \"{{userId}}\",\n  \"sessionId\": \"{{sessionId}}\",\n  \"newMessage\": {\n    \"role\": \"user\",\n    \"parts\": [\n      {\n        \"text\": \"__ENTRY_OPEN__\"\n      }\n    ]\n  },\n  \"streaming\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Expect: state gap vs target -> condition + symptoms -> urgent-not-scary ('44g left') -> hook -> no day-questions."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5 - Alert - Red",
+      "item": [
+        {
+          "name": "Create session - Red alert",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "pm.test('created', () => pm.expect([200,201]).to.include(pm.response.code));",
+                  "pm.collectionVariables.set('sessionId', res.id);",
+                  "pm.test('state seeded', () => pm.expect(res.state).to.be.an('object'));",
+                  "console.log('sessionId =', res.id, '| state keys:', Object.keys(res.state||{}));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/apps/{{appName}}/users/{{userId}}/sessions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "apps",
+                "{{appName}}",
+                "users",
+                "{{userId}}",
+                "sessions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"state\": {\n    \"user_persona\": {\n      \"persona_version\": \"1.0\",\n      \"clinician_summary\": \"34yo, Type 2 Diabetes, tracks macros daily. Period + Nutrition modules.\"\n    },\n    \"user_profile\": {\n      \"user_profile\": {\n        \"age\": 34,\n        \"bmi\": 27.0\n      },\n      \"nutritional_data\": {\n        \"daily_carb_limit_g\": 120,\n        \"daily_calorie_target\": 1800\n      },\n      \"medical_conditions\": [\n        \"Type 2 Diabetes\"\n      ],\n      \"user_logged_data\": {\n        \"symptoms\": [\n          \"Dizziness\",\n          \"Fatigue\",\n          \"Headache\"\n        ],\n        \"total_carbs_g\": 182,\n        \"meals_today\": [\n          {\n            \"meal\": \"Breakfast\",\n            \"item\": \"bagel + cream cheese\",\n            \"carbs_g\": 65\n          },\n          {\n            \"meal\": \"Lunch\",\n            \"item\": \"pasta\",\n            \"carbs_g\": 72\n          },\n          {\n            \"meal\": \"Snacks\",\n            \"item\": \"juice, cookies\",\n            \"carbs_g\": 45\n          }\n        ]\n      },\n      \"module\": \"Period + Nutrition\"\n    },\n    \"entry_context\": {\n      \"type\": \"alert\",\n      \"severity\": \"red\",\n      \"content\": {\n        \"title\": \"Dangerously High Carb Intake\",\n        \"body\": \"Your carb intake is 182g today. Your target: 120g. This level of carb consumption can cause blood sugar spikes that worsen your diabetes symptoms.\"\n      },\n      \"trigger_logs\": {\n        \"carbs_consumed_g\": 182,\n        \"carb_limit_g\": 120\n      }\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Seeds a RED alert (PRD high-carb example: 182g vs 120g, diabetes, dizziness/fatigue/headache)."
+          },
+          "response": []
+        },
+        {
+          "name": "Opening (sentinel)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+                  "let events = []; try { events = pm.response.json(); } catch (e) {}",
+                  "const text = (Array.isArray(events)?events:[])",
+                  "  .filter(e => e && e.content && e.content.parts)",
+                  "  .flatMap(e => e.content.parts)",
+                  "  .filter(p => p && p.text).map(p => p.text).join('');",
+                  "console.log('\\n===== ASSISTANT REPLY =====\\n' + (text || '(no text - if 500, it is usually a Gemini 429 quota limit, not a bug)'));",
+                  "pm.test('non-empty assistant reply', () => pm.expect(text.length).to.be.above(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/run",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "run"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"appName\": \"{{appName}}\",\n  \"userId\": \"{{userId}}\",\n  \"sessionId\": \"{{sessionId}}\",\n  \"newMessage\": {\n    \"role\": \"user\",\n    \"parts\": [\n      {\n        \"text\": \"__ENTRY_OPEN__\"\n      }\n    ]\n  },\n  \"streaming\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Expect: state data -> DIRECT to doctor/educator (AI is NOT the fix) -> offer to PREPARE -> ONE diagnostic question -> affirm doctor priority -> NO region-specific numbers."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6 - Health Checker",
+      "item": [
+        {
+          "name": "Create session - Health Checker",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "pm.test('created', () => pm.expect([200,201]).to.include(pm.response.code));",
+                  "pm.collectionVariables.set('sessionId', res.id);",
+                  "pm.test('state seeded', () => pm.expect(res.state).to.be.an('object'));",
+                  "console.log('sessionId =', res.id, '| state keys:', Object.keys(res.state||{}));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/apps/{{appName}}/users/{{userId}}/sessions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "apps",
+                "{{appName}}",
+                "users",
+                "{{userId}}",
+                "sessions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"state\": {\n    \"user_persona\": {\n      \"persona_version\": \"1.0\",\n      \"clinician_summary\": \"29yo, usual ~30d cycle, no known conditions.\"\n    },\n    \"user_profile\": {\n      \"user_profile\": {\n        \"age\": 29,\n        \"bmi\": 22.1\n      },\n      \"cycle_data\": {\n        \"current_cycle_day\": 40,\n        \"average_cycle_length\": 30,\n        \"late_period_flag\": true\n      },\n      \"user_logged_data\": {\n        \"symptoms\": [\n          \"Bloating\",\n          \"Acne\"\n        ]\n      },\n      \"module\": \"Period + Nutrition\"\n    },\n    \"entry_context\": {\n      \"type\": \"health_checker\",\n      \"content\": {\n        \"title\": \"Your period is late\",\n        \"body\": \"Your health checker flagged that your period is late relative to your usual cycle length.\"\n      },\n      \"trigger_logs\": {\n        \"flagged_pattern\": \"late period / possible PCOS pattern\",\n        \"current_cycle_day\": 40,\n        \"average_cycle_length\": 30,\n        \"late_period_flag\": true\n      }\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Seeds a Health Checker entry_context (late-period flag, cycle day 40 of usual 30)."
+          },
+          "response": []
+        },
+        {
+          "name": "Opening (sentinel)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+                  "let events = []; try { events = pm.response.json(); } catch (e) {}",
+                  "const text = (Array.isArray(events)?events:[])",
+                  "  .filter(e => e && e.content && e.content.parts)",
+                  "  .flatMap(e => e.content.parts)",
+                  "  .filter(p => p && p.text).map(p => p.text).join('');",
+                  "console.log('\\n===== ASSISTANT REPLY =====\\n' + (text || '(no text - if 500, it is usually a Gemini 429 quota limit, not a bug)'));",
+                  "pm.test('non-empty assistant reply', () => pm.expect(text.length).to.be.above(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/run",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "run"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"appName\": \"{{appName}}\",\n  \"userId\": \"{{userId}}\",\n  \"sessionId\": \"{{sessionId}}\",\n  \"newMessage\": {\n    \"role\": \"user\",\n    \"parts\": [\n      {\n        \"text\": \"__ENTRY_OPEN__\"\n      }\n    ]\n  },\n  \"streaming\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Expect (doctor-patient mode): name the flagged pattern + 1-line definition -> weave in cycle context (day 40) -> ask 2-3 '- ' questions -> STOP (no causes/suggestions); never diagnose."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "7 - Utilities",
+      "item": [
+        {
+          "name": "Get session (inspect state)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/apps/{{appName}}/users/{{userId}}/sessions/{{sessionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "apps",
+                "{{appName}}",
+                "users",
+                "{{userId}}",
+                "sessions",
+                "{{sessionId}}"
+              ]
+            },
+            "description": "Inspect the current session's stored state + events."
+          },
+          "response": []
+        },
+        {
+          "name": "Language check (Roman Hindi)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+                  "let events = []; try { events = pm.response.json(); } catch (e) {}",
+                  "const text = (Array.isArray(events)?events:[])",
+                  "  .filter(e => e && e.content && e.content.parts)",
+                  "  .flatMap(e => e.content.parts)",
+                  "  .filter(p => p && p.text).map(p => p.text).join('');",
+                  "console.log('\\n===== ASSISTANT REPLY =====\\n' + (text || '(no text - if 500, it is usually a Gemini 429 quota limit, not a bug)'));",
+                  "pm.test('non-empty assistant reply', () => pm.expect(text.length).to.be.above(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/run",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "run"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"appName\": \"{{appName}}\",\n  \"userId\": \"{{userId}}\",\n  \"sessionId\": \"{{sessionId}}\",\n  \"newMessage\": {\n    \"role\": \"user\",\n    \"parts\": [\n      {\n        \"text\": \"Mujhe bloating aur headache ho raha hai, kya karu?\"\n      }\n    ]\n  },\n  \"streaming\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Global rule: reply must mirror language + script (Roman Hindi / Latin), not English/Devanagari. Run against any existing sessionId."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
