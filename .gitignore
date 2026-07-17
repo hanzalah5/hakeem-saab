@@ -50,3 +50,6 @@ Thumbs.db
 *.sqlite
 *.sqlite3
 femverse_sessions.db
+
+# Postman collections are local testing aids — keep them out of the repo
+postman/
