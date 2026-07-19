@@ -77,6 +77,43 @@ def _entry_fragment_stem(entry: dict) -> str | None:
     return _ENTRY_FRAGMENTS.get(entry_type)
 
 
+def _render_transcript(value) -> str:
+    """Render a seeded call transcript to readable ``Caller:``/``Assistant:`` lines.
+
+    Tolerates the backend's content-events shape (``{"events": [...]}`` or a bare
+    list of ``{author, content:{role, parts:[{text}]}}``), a JSON string of either,
+    or an already-plain-text transcript. Returns ``""`` when there's nothing usable.
+    """
+    if not value:
+        return ""
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return ""
+        try:
+            value = json.loads(stripped)
+        except (ValueError, TypeError):
+            return stripped  # already a plain-text transcript
+    events = value.get("events") if isinstance(value, dict) else value
+    if not isinstance(events, list):
+        return str(value).strip()
+    lines = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        content = event.get("content") or {}
+        parts = content.get("parts") or []
+        text = " ".join(
+            p.get("text", "") for p in parts if isinstance(p, dict) and p.get("text")
+        ).strip()
+        if not text:
+            continue
+        role = str(content.get("role") or event.get("author") or "").lower()
+        speaker = "Caller" if role in ("user", "caller") else "Assistant"
+        lines.append(f"{speaker}: {text}")
+    return "\n".join(lines)
+
+
 def _is_opening_turn(callback_context: CallbackContext) -> bool:
     """True on the session's first agent turn (no prior model output yet).
 
@@ -109,6 +146,16 @@ def _compose_system_prompt(callback_context: CallbackContext, domain: str) -> No
             except PromptNotFoundError:
                 # Entry type not yet authored — degrade gracefully to base behavior.
                 _logger.warning("Entry fragment '%s' not found; using base prompt.", stem)
+
+    # An earlier voice-call transcript (seeded into state by the backend, possibly
+    # mid-session via PATCH) is rendered to readable text and injected every turn it
+    # is present — so the bot stays aware of the call for the rest of the conversation.
+    transcript = _render_transcript(callback_context.state.get("call_transcript"))
+    if transcript:
+        try:
+            parts.append(load_prompt("call_transcript_guidance") + "\n\n" + transcript)
+        except PromptNotFoundError:
+            parts.append(transcript)
 
     callback_context.state["system_prompt"] = "\n\n".join(parts)
 
